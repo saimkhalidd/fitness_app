@@ -12,54 +12,11 @@ import 'package:google_fonts/google_fonts.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  runApp(const MyApp());
+  runApp(const Root());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Fitness App',
-      theme: ThemeData(
-        primaryColor: Colors.red,
-        scaffoldBackgroundColor: Colors.white,
-        appBarTheme: AppBarTheme(
-          backgroundColor:
-              Colors.white, // white background for app bar to show black text
-          centerTitle: true,
-          titleTextStyle: GoogleFonts.anton(
-            color: Colors.black,
-            fontSize: 28,
-            fontWeight: FontWeight.w400,
-          ),
-          iconTheme: const IconThemeData(color: Colors.black),
-          elevation: 0,
-        ),
-        textTheme: const TextTheme(bodyMedium: TextStyle(color: Colors.black)),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
-        ),
-        colorScheme: ColorScheme.fromSwatch().copyWith(
-          secondary: Colors.redAccent,
-        ),
-      ),
-      home: const AuthGate(),
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/signup': (context) => const SignupScreen(),
-        '/home': (context) => const HomeScreen(),
-        '/fitness_data': (context) => const FitnessDataScreen(),
-      },
-    );
-  }
-}
-
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
+class Root extends StatelessWidget {
+  const Root({super.key});
 
   Future<bool> hasFitnessData() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -74,31 +31,84 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.active) {
-          final user = snapshot.data;
-          if (user == null) {
-            return const LoginScreen();
-          }
-
-          return FutureBuilder<bool>(
-            future: hasFitnessData(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
-              final hasData = snapshot.data ?? false;
-              if (hasData) {
-                return const HomeScreen();
-              } else {
-                return const FitnessDataScreen();
-              }
-            },
+        // While waiting for auth stream
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const MaterialApp(
+            home: Scaffold(body: Center(child: CircularProgressIndicator())),
           );
         }
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
+        final user = snapshot.data;
+
+        // If user not signed in, show login
+        if (user == null) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'Fitness App',
+            theme: _buildTheme(),
+            home: const LoginScreen(),
+            routes: _routes(),
+          );
+        }
+
+        // If user signed in, check if fitness data exists
+        return FutureBuilder<bool>(
+          future: hasFitnessData(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const MaterialApp(
+                home: Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                ),
+              );
+            }
+            final hasData = snapshot.data ?? false;
+
+            return MaterialApp(
+              debugShowCheckedModeBanner: false,
+              title: 'Fitness App',
+              theme: _buildTheme(),
+              home: hasData ? const HomeScreen() : const FitnessDataScreen(),
+              routes: _routes(),
+            );
+          },
+        );
       },
     );
+  }
+
+  ThemeData _buildTheme() {
+    return ThemeData(
+      primaryColor: Colors.red,
+      scaffoldBackgroundColor: Colors.white,
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.white,
+        centerTitle: true,
+        titleTextStyle: GoogleFonts.anton(
+          color: Colors.black,
+          fontSize: 28,
+          fontWeight: FontWeight.w400,
+        ),
+        iconTheme: const IconThemeData(color: Colors.black),
+        elevation: 0,
+      ),
+      textTheme: const TextTheme(bodyMedium: TextStyle(color: Colors.black)),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: Colors.red,
+        foregroundColor: Colors.white,
+      ),
+      colorScheme: ColorScheme.fromSwatch().copyWith(
+        secondary: Colors.redAccent,
+      ),
+    );
+  }
+
+  Map<String, WidgetBuilder> _routes() {
+    return {
+      '/login': (context) => const LoginScreen(),
+      '/signup': (context) => const SignupScreen(),
+      '/home': (context) => const HomeScreen(),
+      '/fitness_data': (context) => const FitnessDataScreen(),
+    };
   }
 }
